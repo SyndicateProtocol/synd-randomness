@@ -2,12 +2,12 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std/Script.sol";
-import {SequencingBundler} from "../src/SequencingBundler.sol";
+import {RandomnessSequencer} from "../src/RandomnessSequencer.sol";
 import {Random} from "../src/Random.sol";
 import {console} from "forge-std/console.sol";
 
-contract DeploySequencingBundler is Script {
-    function run() external returns (SequencingBundler) {
+contract DeployRandomnessSequencer is Script {
+    function run() external returns (RandomnessSequencer) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
 
         address sequencingAddress = vm.envAddress("SEQUENCING_ADDRESS");
@@ -18,10 +18,10 @@ contract DeploySequencingBundler is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        SequencingBundler bundler = new SequencingBundler(
+        RandomnessSequencer sequencer = new RandomnessSequencer(
             sequencingAddress, randomnessRole, sequencerRole, functionSelectorAdminRole, adminRole
         );
-        console.log("SequencingBundler deployed to:", address(bundler));
+        console.log("RandomnessSequencer deployed to:", address(sequencer));
         console.log("SequencingAddress:", sequencingAddress);
         console.log("RandomnessRole:", randomnessRole);
         console.log("SequencerRole:", sequencerRole);
@@ -29,7 +29,7 @@ contract DeploySequencingBundler is Script {
         console.log("AdminRole:", adminRole);
 
         vm.stopBroadcast();
-        return bundler;
+        return sequencer;
     }
 }
 

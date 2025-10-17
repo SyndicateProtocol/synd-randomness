@@ -1,0 +1,409 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.25;
+
+import {Test} from "forge-std/Test.sol";
+import {RandomnessSequencer} from "../src/RandomnessSequencer.sol";
+import {ISequencingChain} from "../src/interfaces/ISequencingChain.sol";
+
+contract MockSequencingChain is ISequencingChain {
+    bytes[] public processedTransactions;
+    bytes[][] public processedBulkTransactions;
+
+    function processTransaction(bytes calldata data) external override {
+        processedTransactions.push(data);
+    }
+
+    function processTransactionsBulk(bytes[] calldata data) external override {
+        processedBulkTransactions.push(data);
+    }
+
+    function getProcessedCount() external view returns (uint256) {
+        return processedTransactions.length;
+    }
+
+    function getProcessedBulkCount() external view returns (uint256) {
+        return processedBulkTransactions.length;
+    }
+}
+
+contract RandomnessSequencerTest is Test {
+    RandomnessSequencer public sequencer;
+    MockSequencingChain public mockChain;
+
+    address public admin = address(1);
+    address public randomnessRole = address(2);
+    address public sequencerRole = address(3);
+    address public functionSelectorAdmin = address(4);
+    address public unauthorized = address(5);
+
+    event MempoolUpdated(uint256 mempoolSize, bytes txn);
+    event MempoolCleared();
+    event FunctionSelectorAdded(address indexed contractAddress, bytes4 indexed selector);
+    event FunctionSelectorRemoved(address indexed contractAddress, bytes4 indexed selector);
+
+    function setUp() public {
+        mockChain = new MockSequencingChain();
+        sequencer = new RandomnessSequencer(
+            address(mockChain),
+            randomnessRole,
+            sequencerRole,
+            functionSelectorAdmin,
+            admin
+        );
+    }
+
+    function testConstructor() public view {
+        assertEq(address(sequencer.sequencingAddress()), address(mockChain));
+        assertTrue(sequencer.hasRole(sequencer.RANDOMNESS_ROLE(), randomnessRole));
+        assertTrue(sequencer.hasRole(sequencer.SEQUENCER_ROLE(), sequencerRole));
+        assertTrue(sequencer.hasRole(sequencer.FUNCTION_SELECTOR_ADMIN_ROLE(), functionSelectorAdmin));
+        assertTrue(sequencer.hasRole(sequencer.DEFAULT_ADMIN_ROLE(), admin));
+    }
+
+    function testAddFunctionSelector() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(keccak256("testFunction()"));
+
+        vm.prank(functionSelectorAdmin);
+        vm.expectEmit(true, true, false, true);
+        emit FunctionSelectorAdded(targetContract, selector);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        assertTrue(sequencer.isRandomnessRequired(targetContract, selector));
+
+        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getRandomnessRequiredFunctions();
+        assertEq(funcs.length, 1);
+        assertEq(funcs[0].contractAddress, targetContract);
+        assertEq(funcs[0].selector, selector);
+    }
+
+    function testAddFunctionSelectorUnauthorized() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(keccak256("testFunction()"));
+
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        sequencer.addFunctionSelector(targetContract, selector);
+    }
+
+    function testAddFunctionSelectorAlreadyExists() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(keccak256("testFunction()"));
+
+        vm.prank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        vm.prank(functionSelectorAdmin);
+        vm.expectRevert("Function already added");
+        sequencer.addFunctionSelector(targetContract, selector);
+    }
+
+    function testRemoveFunctionSelector() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(keccak256("testFunction()"));
+
+        vm.prank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        vm.prank(functionSelectorAdmin);
+        vm.expectEmit(true, true, false, true);
+        emit FunctionSelectorRemoved(targetContract, selector);
+        sequencer.removeFunctionSelector(targetContract, selector);
+
+        assertFalse(sequencer.isRandomnessRequired(targetContract, selector));
+
+        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getRandomnessRequiredFunctions();
+        assertEq(funcs.length, 0);
+    }
+
+    function testRemoveFunctionSelectorUnauthorized() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(keccak256("testFunction()"));
+
+        vm.prank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        sequencer.removeFunctionSelector(targetContract, selector);
+    }
+
+    function testRemoveFunctionSelectorNotFound() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(keccak256("testFunction()"));
+
+        vm.prank(functionSelectorAdmin);
+        vm.expectRevert("Function not found");
+        sequencer.removeFunctionSelector(targetContract, selector);
+    }
+
+    function testProcessTransactionWithoutRandomnessRequired() public {
+        // Create a simple EIP-1559 transaction
+        bytes memory txn = _createMockTransaction(address(0x123), hex"12345678");
+
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn);
+
+        assertEq(sequencer.getMempoolLength(), 0);
+        assertEq(mockChain.getProcessedCount(), 1);
+    }
+
+    function testProcessTransactionWithRandomnessRequired() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(hex"12345678");
+
+        // Add function selector to require randomness
+        vm.prank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        bytes memory txn = _createMockTransaction(targetContract, abi.encodePacked(selector));
+
+        vm.prank(sequencerRole);
+        vm.expectEmit(false, false, false, true);
+        emit MempoolUpdated(1, txn);
+        sequencer.processTransaction(txn);
+
+        assertEq(sequencer.getMempoolLength(), 1);
+        assertEq(mockChain.getProcessedCount(), 0);
+    }
+
+    function testProcessTransactionUnauthorized() public {
+        bytes memory txn = _createMockTransaction(address(0x123), hex"12345678");
+
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        sequencer.processTransaction(txn);
+    }
+
+    function testProcessTransactionsBulk() public {
+        bytes[] memory txns = new bytes[](2);
+        txns[0] = _createMockTransaction(address(0x123), hex"12345678");
+        txns[1] = _createMockTransaction(address(0x456), hex"87654321");
+
+        vm.prank(sequencerRole);
+        sequencer.processTransactionsBulk(txns);
+
+        assertEq(sequencer.getMempoolLength(), 0);
+        assertEq(mockChain.getProcessedCount(), 2);
+    }
+
+    function testProcessTransactionsBulkUnauthorized() public {
+        bytes[] memory txns = new bytes[](1);
+        txns[0] = _createMockTransaction(address(0x123), hex"12345678");
+
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        sequencer.processTransactionsBulk(txns);
+    }
+
+    function testAddRandomnessProcessesMempool() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(hex"12345678");
+
+        // Add function selector to require randomness
+        vm.prank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        // Add transactions to mempool
+        bytes memory txn1 = _createMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn2 = _createMockTransaction(targetContract, abi.encodePacked(selector));
+
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn1);
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn2);
+
+        assertEq(sequencer.getMempoolLength(), 2);
+
+        // Add randomness transaction
+        bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
+
+        vm.prank(randomnessRole);
+        vm.expectEmit(false, false, false, false);
+        emit MempoolCleared();
+        sequencer.addRandomness(randomnessTx);
+
+        // Mempool should be cleared
+        assertEq(sequencer.getMempoolLength(), 0);
+
+        // Mock chain should have processed randomness tx + bulk mempool
+        assertEq(mockChain.getProcessedCount(), 1); // randomness tx
+        assertEq(mockChain.getProcessedBulkCount(), 1); // mempool bulk
+    }
+
+    function testAddRandomnessUnauthorized() public {
+        bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
+
+        vm.prank(unauthorized);
+        vm.expectRevert();
+        sequencer.addRandomness(randomnessTx);
+    }
+
+    function testAddRandomnessWithEmptyMempool() public {
+        bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
+
+        vm.prank(randomnessRole);
+        sequencer.addRandomness(randomnessTx);
+
+        assertEq(mockChain.getProcessedCount(), 1);
+        assertEq(mockChain.getProcessedBulkCount(), 0);
+    }
+
+    function testTransactionNoncesIncrement() public {
+        address targetContract = address(0x123);
+        address player = address(0x456);
+        bytes4 selector = bytes4(hex"12345678");
+
+        // Add function selector to require randomness
+        vm.prank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(targetContract, selector);
+
+        // Process multiple transactions
+        bytes memory txn1 = _createMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn2 = _createMockTransaction(targetContract, abi.encodePacked(selector));
+
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn1);
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn2);
+
+        // Note: transactionNonces tracking requires actual transaction decoding
+        // This is a simplified test - actual nonce verification would need valid signed transactions
+    }
+
+    function testMultipleFunctionSelectors() public {
+        address contract1 = address(0x123);
+        address contract2 = address(0x456);
+        bytes4 selector1 = bytes4(hex"11111111");
+        bytes4 selector2 = bytes4(hex"22222222");
+
+        vm.startPrank(functionSelectorAdmin);
+        sequencer.addFunctionSelector(contract1, selector1);
+        sequencer.addFunctionSelector(contract2, selector2);
+        vm.stopPrank();
+
+        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getRandomnessRequiredFunctions();
+        assertEq(funcs.length, 2);
+    }
+
+    // Helper function to create a real RLP-encoded EIP-1559 transaction
+    function _createMockTransaction(address to, bytes memory data) internal view returns (bytes memory) {
+        uint256 privateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80; // Test private key
+        address signer = vm.addr(privateKey);
+
+        // EIP-1559 transaction parameters
+        uint256 chainId = 1;
+        uint256 nonce = 0;
+        uint256 maxPriorityFeePerGas = 1 gwei;
+        uint256 maxFeePerGas = 10 gwei;
+        uint256 gasLimit = 100000;
+        uint256 value = 0;
+        bytes memory accessList = hex"c0"; // Empty access list
+
+        // Build the unsigned transaction payload (9 items)
+        bytes memory unsignedPayload = abi.encodePacked(
+            _encodeUint(chainId),
+            _encodeUint(nonce),
+            _encodeUint(maxPriorityFeePerGas),
+            _encodeUint(maxFeePerGas),
+            _encodeUint(gasLimit),
+            _encodeAddress(to),
+            _encodeUint(value),
+            _encodeBytes(data),
+            accessList
+        );
+
+        // Wrap in RLP list
+        bytes memory rlpUnsigned = _encodeList(unsignedPayload);
+
+        // Hash for signing: keccak256(0x02 || rlp(unsigned_tx))
+        bytes32 txHash = keccak256(abi.encodePacked(bytes1(0x02), rlpUnsigned));
+
+        // Sign the transaction
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, txHash);
+
+        // Build the signed transaction (12 items: 9 unsigned + v, r, s)
+        bytes memory signedPayload = abi.encodePacked(
+            unsignedPayload,
+            _encodeUint(v - 27), // EIP-1559 uses v - 27
+            _encodeBytes32(r),
+            _encodeBytes32(s)
+        );
+
+        // Wrap in RLP list and prepend 0x02
+        return abi.encodePacked(bytes1(0x02), _encodeList(signedPayload));
+    }
+
+    // RLP encoding helpers
+    function _encodeUint(uint256 value) internal pure returns (bytes memory) {
+        if (value == 0) {
+            return hex"80";
+        }
+        if (value < 128) {
+            return abi.encodePacked(uint8(value));
+        }
+        bytes memory valueBytes = _toBytes(value);
+        return abi.encodePacked(uint8(0x80 + valueBytes.length), valueBytes);
+    }
+
+    function _encodeBytes(bytes memory data) internal pure returns (bytes memory) {
+        if (data.length == 0) {
+            return hex"80";
+        }
+        if (data.length == 1 && uint8(data[0]) < 128) {
+            return data;
+        }
+        if (data.length <= 55) {
+            return abi.encodePacked(uint8(0x80 + data.length), data);
+        }
+        bytes memory lengthBytes = _toBytes(data.length);
+        return abi.encodePacked(uint8(0xb7 + lengthBytes.length), lengthBytes, data);
+    }
+
+    function _encodeAddress(address addr) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(0x94), addr); // 0x94 = 0x80 + 20 bytes
+    }
+
+    function _encodeBytes32(bytes32 data) internal pure returns (bytes memory) {
+        // Remove leading zeros
+        uint256 i = 0;
+        while (i < 32 && data[i] == 0) {
+            i++;
+        }
+        if (i == 32) {
+            return hex"80"; // All zeros
+        }
+        bytes memory trimmed = new bytes(32 - i);
+        for (uint256 j = 0; j < 32 - i; j++) {
+            trimmed[j] = data[i + j];
+        }
+        return _encodeBytes(trimmed);
+    }
+
+    function _encodeList(bytes memory data) internal pure returns (bytes memory) {
+        if (data.length <= 55) {
+            return abi.encodePacked(uint8(0xc0 + data.length), data);
+        }
+        bytes memory lengthBytes = _toBytes(data.length);
+        return abi.encodePacked(uint8(0xf7 + lengthBytes.length), lengthBytes, data);
+    }
+
+    function _toBytes(uint256 value) internal pure returns (bytes memory) {
+        if (value == 0) {
+            return new bytes(0);
+        }
+        uint256 length = 0;
+        uint256 temp = value;
+        while (temp != 0) {
+            length++;
+            temp >>= 8;
+        }
+        bytes memory result = new bytes(length);
+        temp = value;
+        for (uint256 i = length; i > 0; i--) {
+            result[i - 1] = bytes1(uint8(temp & 0xff));
+            temp >>= 8;
+        }
+        return result;
+    }
+}

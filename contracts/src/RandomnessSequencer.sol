@@ -5,7 +5,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {RLPTxBreakdown} from "./RLP/RLPTxBreakdown.sol";
 import {ISequencingChain} from "./interfaces/ISequencingChain.sol";
 
-contract SequencingBundler is AccessControl, ISequencingChain {
+contract RandomnessSequencer is AccessControl, ISequencingChain {
     bytes32 public constant RANDOMNESS_ROLE = keccak256("RANDOMNESS_ROLE");
     bytes32 public constant SEQUENCER_ROLE = keccak256("SEQUENCER_ROLE");
     bytes32 public constant FUNCTION_SELECTOR_ADMIN_ROLE = keccak256("FUNCTION_SELECTOR_ADMIN_ROLE");
