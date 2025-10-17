@@ -6,12 +6,15 @@ import {IRandom} from "./interfaces/IRandom.sol";
 
 contract Random is AccessControl, IRandom {
     bytes32 public constant RANDOMNESS_ADMIN_ROLE = keccak256("RANDOMNESS_ADMIN_ROLE");
-
     uint256 public random;
 
     modifier onlyRandomnessAdmin() {
-        require(hasRole(RANDOMNESS_ADMIN_ROLE, msg.sender), "Caller is not the randomness admin");
+        _onlyRandomnessAdmin();
         _;
+    }
+
+    function _onlyRandomnessAdmin() internal view {
+        require(hasRole(RANDOMNESS_ADMIN_ROLE, msg.sender), "Caller is not the randomness admin");
     }
 
     constructor(address randomnessAdmin) {
