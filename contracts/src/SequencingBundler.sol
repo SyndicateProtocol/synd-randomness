@@ -16,14 +16,19 @@ contract SequencingBundler is AccessControl, ISequencingChain {
     mapping(address contractAddress => mapping(address playerAddress => mapping(bytes4 selector => uint256 nonce)))
         public transactionNonces;
 
-    // Track function signatures that should be held for randomness
-    bytes4[] public randomnessRequiredSelectors;
-    mapping(bytes4 => bool) public isRandomnessRequired;
+    // Track contract address + function signature combinations that should be held for randomness
+    struct ContractFunction {
+        address contractAddress;
+        bytes4 selector;
+    }
+
+    ContractFunction[] public randomnessRequiredFunctions;
+    mapping(address contractAddress => mapping(bytes4 selector => bool)) public isRandomnessRequired;
 
     event MempoolUpdated(uint256 mempoolSize, bytes txn);
     event MempoolCleared();
-    event FunctionSelectorAdded(bytes4 indexed selector);
-    event FunctionSelectorRemoved(bytes4 indexed selector);
+    event FunctionSelectorAdded(address indexed contractAddress, bytes4 indexed selector);
+    event FunctionSelectorRemoved(address indexed contractAddress, bytes4 indexed selector);
 
     constructor(
         address sequencingAddress_,
@@ -39,31 +44,40 @@ contract SequencingBundler is AccessControl, ISequencingChain {
         _grantRole(DEFAULT_ADMIN_ROLE, adminRole_);
     }
 
-    function addFunctionSelector(bytes4 selector) external onlyRole(FUNCTION_SELECTOR_ADMIN_ROLE) {
-        require(!isRandomnessRequired[selector], "Selector already added");
-        randomnessRequiredSelectors.push(selector);
-        isRandomnessRequired[selector] = true;
-        emit FunctionSelectorAdded(selector);
+    function addFunctionSelector(address contractAddress, bytes4 selector)
+        external
+        onlyRole(FUNCTION_SELECTOR_ADMIN_ROLE)
+    {
+        require(!isRandomnessRequired[contractAddress][selector], "Function already added");
+        randomnessRequiredFunctions.push(ContractFunction({contractAddress: contractAddress, selector: selector}));
+        isRandomnessRequired[contractAddress][selector] = true;
+        emit FunctionSelectorAdded(contractAddress, selector);
     }
 
-    function removeFunctionSelector(bytes4 selector) external onlyRole(FUNCTION_SELECTOR_ADMIN_ROLE) {
-        require(isRandomnessRequired[selector], "Selector not found");
+    function removeFunctionSelector(address contractAddress, bytes4 selector)
+        external
+        onlyRole(FUNCTION_SELECTOR_ADMIN_ROLE)
+    {
+        require(isRandomnessRequired[contractAddress][selector], "Function not found");
 
         // Find and remove from array
-        for (uint256 i = 0; i < randomnessRequiredSelectors.length; i++) {
-            if (randomnessRequiredSelectors[i] == selector) {
-                randomnessRequiredSelectors[i] = randomnessRequiredSelectors[randomnessRequiredSelectors.length - 1];
-                randomnessRequiredSelectors.pop();
+        for (uint256 i = 0; i < randomnessRequiredFunctions.length; i++) {
+            if (
+                randomnessRequiredFunctions[i].contractAddress == contractAddress
+                    && randomnessRequiredFunctions[i].selector == selector
+            ) {
+                randomnessRequiredFunctions[i] = randomnessRequiredFunctions[randomnessRequiredFunctions.length - 1];
+                randomnessRequiredFunctions.pop();
                 break;
             }
         }
 
-        isRandomnessRequired[selector] = false;
-        emit FunctionSelectorRemoved(selector);
+        isRandomnessRequired[contractAddress][selector] = false;
+        emit FunctionSelectorRemoved(contractAddress, selector);
     }
 
-    function getRandomnessRequiredSelectors() external view returns (bytes4[] memory) {
-        return randomnessRequiredSelectors;
+    function getRandomnessRequiredFunctions() external view returns (ContractFunction[] memory) {
+        return randomnessRequiredFunctions;
     }
 
     function addRandomness(bytes calldata randomnessTx) external onlyRole(RANDOMNESS_ROLE) {
@@ -102,7 +116,7 @@ contract SequencingBundler is AccessControl, ISequencingChain {
         RLPTxBreakdown.DecodedTransaction memory decodedTx = RLPTxBreakdown.decodeTx(txn);
         if (decodedTx.data.length > 0 && !decodedTx.isContractDeployment) {
             bytes4 selector = getFunctionSelector(decodedTx.data);
-            if (isRandomnessRequired[selector]) {
+            if (isRandomnessRequired[decodedTx.to][selector]) {
                 transactionNonces[decodedTx.to][decodedTx.from][selector]++;
                 mempool.push(txn);
                 emit MempoolUpdated(mempool.length, txn);
