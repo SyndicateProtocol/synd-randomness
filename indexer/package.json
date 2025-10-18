@@ -9,15 +9,25 @@
     "db": "ponder db",
     "codegen": "ponder codegen",
     "lint": "eslint .",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "doLitAction": "bun run lit/doLit.ts"
   },
   "dependencies": {
-    "ponder": "^0.14.3",
+    "@lit-protocol/auth-helpers": "^7.2.0",
+    "@lit-protocol/constants": "^7.2.0",
+    "@lit-protocol/contracts-sdk": "^7.3.1",
+    "@lit-protocol/lit-node-client": "^7.3.1",
+    "drand-client": "^1.4.2",
+    "ethers": "v5",
     "hono": "^4.5.0",
+    "ipfs-only-hash": "^4.0.0",
+    "node-localstorage": "^3.0.5",
+    "ponder": "^0.14.3",
     "viem": "^2.21.3"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
+    "@types/node-localstorage": "^1.3.3",
     "eslint": "^8.53.0",
     "eslint-config-ponder": "^0.14.3",
     "typescript": "^5.2.2"
