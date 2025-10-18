@@ -43,13 +43,8 @@ contract RandomnessSequencerTest is Test {
 
     function setUp() public {
         mockChain = new MockSequencingChain();
-        sequencer = new RandomnessSequencer(
-            address(mockChain),
-            randomnessRole,
-            sequencerRole,
-            functionSelectorAdmin,
-            admin
-        );
+        sequencer =
+            new RandomnessSequencer(address(mockChain), randomnessRole, sequencerRole, functionSelectorAdmin, admin);
     }
 
     function testConstructor() public view {
@@ -289,7 +284,6 @@ contract RandomnessSequencerTest is Test {
     // Helper function to create a real RLP-encoded EIP-1559 transaction
     function _createMockTransaction(address to, bytes memory data) internal view returns (bytes memory) {
         uint256 privateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80; // Test private key
-        address signer = vm.addr(privateKey);
 
         // EIP-1559 transaction parameters
         uint256 chainId = 1;
