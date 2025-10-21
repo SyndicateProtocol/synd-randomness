@@ -126,7 +126,7 @@ All deployment and configuration is handled via the Makefile. See the [Makefile]
 ### Deploy Contracts
 
 ```bash
-# Deploy RandomnessSequencer (on Risa)
+# Deploy RandomnessSequencer (on sequencing chain)
 make deploy-sequencer
 
 # Deploy Random (on appchain)

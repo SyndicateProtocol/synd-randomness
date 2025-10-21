@@ -13,7 +13,7 @@ This indexer watches for transactions that require randomness and automatically:
 ## Architecture
 
 ### Event Monitoring
-The indexer uses Ponder to watch the RandomnessSequencer contract on the sequencing chain (Risa).
+The indexer uses Ponder to watch the RandomnessSequencer contract on the sequencing chain.
 
 ### Lit Protocol Integration
 When a randomness request is detected:
