@@ -58,7 +58,7 @@ export const RandomnessSequencerAbi = [
   },
   {
     "type": "function",
-    "name": "RANDOMNESS_ROLE",
+    "name": "RANDOM_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
       {
@@ -71,7 +71,7 @@ export const RandomnessSequencerAbi = [
   },
   {
     "type": "function",
-    "name": "SEQUENCER_ROLE",
+    "name": "SEQUENCER_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
       {
@@ -84,7 +84,7 @@ export const RandomnessSequencerAbi = [
   },
   {
     "type": "function",
-    "name": "addFunctionSelector",
+    "name": "addToFunctionAllowlist",
     "inputs": [
       {
         "name": "contractAddress",
@@ -102,33 +102,7 @@ export const RandomnessSequencerAbi = [
   },
   {
     "type": "function",
-    "name": "addRandomness",
-    "inputs": [
-      {
-        "name": "randomnessTx",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "getMempoolLength",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getRandomnessRequiredFunctions",
+    "name": "getAllowlistedFunctions",
     "inputs": [],
     "outputs": [
       {
@@ -147,6 +121,19 @@ export const RandomnessSequencerAbi = [
             "internalType": "bytes4"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMempoolLength",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -257,6 +244,19 @@ export const RandomnessSequencerAbi = [
   },
   {
     "type": "function",
+    "name": "processRandomTransaction",
+    "inputs": [
+      {
+        "name": "randomTransaction",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "processTransaction",
     "inputs": [
       {
@@ -307,7 +307,7 @@ export const RandomnessSequencerAbi = [
   },
   {
     "type": "function",
-    "name": "removeFunctionSelector",
+    "name": "removeFromFunctionAllowlist",
     "inputs": [
       {
         "name": "contractAddress",
