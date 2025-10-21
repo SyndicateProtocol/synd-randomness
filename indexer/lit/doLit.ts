@@ -1,5 +1,5 @@
 import { getLitRandomnessSequencerTransaction } from "./getLitRandomnessSequencerTransaction"
 
-const bundlerTransaction = await getLitRandomnessSequencerTransaction()
-console.log("bundlerTransaction", bundlerTransaction)
+const sequencerTransaction = await getLitRandomnessSequencerTransaction()
+console.log("sequencerTransaction", sequencerTransaction)
 process.exit(0)

@@ -6,8 +6,8 @@ import {RLPTxBreakdown} from "./RLP/RLPTxBreakdown.sol";
 import {ISequencingChain} from "./interfaces/ISequencingChain.sol";
 
 contract RandomnessSequencer is AccessControl, ISequencingChain {
-    bytes32 public constant RANDOMNESS_ROLE = keccak256("RANDOMNESS_ROLE");
-    bytes32 public constant SEQUENCER_ROLE = keccak256("SEQUENCER_ROLE");
+    bytes32 public constant RANDOM_ADMIN_ROLE = keccak256("RANDOM_ADMIN_ROLE");
+    bytes32 public constant SEQUENCER_ADMIN_ROLE = keccak256("SEQUENCER_ADMIN_ROLE");
     bytes32 public constant FUNCTION_SELECTOR_ADMIN_ROLE = keccak256("FUNCTION_SELECTOR_ADMIN_ROLE");
 
     ISequencingChain public sequencingAddress;
@@ -38,13 +38,13 @@ contract RandomnessSequencer is AccessControl, ISequencingChain {
         address adminRole_
     ) {
         sequencingAddress = ISequencingChain(sequencingAddress_);
-        _grantRole(RANDOMNESS_ROLE, randomnessRole_);
-        _grantRole(SEQUENCER_ROLE, sequencerRole_);
+        _grantRole(RANDOM_ADMIN_ROLE, randomnessRole_);
+        _grantRole(SEQUENCER_ADMIN_ROLE, sequencerRole_);
         _grantRole(FUNCTION_SELECTOR_ADMIN_ROLE, functionSelectorAdminRole_);
         _grantRole(DEFAULT_ADMIN_ROLE, adminRole_);
     }
 
-    function addFunctionSelector(address contractAddress, bytes4 selector)
+    function addToFunctionAllowlist(address contractAddress, bytes4 selector)
         external
         onlyRole(FUNCTION_SELECTOR_ADMIN_ROLE)
     {
@@ -54,7 +54,7 @@ contract RandomnessSequencer is AccessControl, ISequencingChain {
         emit FunctionSelectorAdded(contractAddress, selector);
     }
 
-    function removeFunctionSelector(address contractAddress, bytes4 selector)
+    function removeFromFunctionAllowlist(address contractAddress, bytes4 selector)
         external
         onlyRole(FUNCTION_SELECTOR_ADMIN_ROLE)
     {
@@ -76,12 +76,12 @@ contract RandomnessSequencer is AccessControl, ISequencingChain {
         emit FunctionSelectorRemoved(contractAddress, selector);
     }
 
-    function getRandomnessRequiredFunctions() external view returns (ContractFunction[] memory) {
+    function getAllowlistedFunctions() external view returns (ContractFunction[] memory) {
         return randomnessRequiredFunctions;
     }
 
-    function addRandomness(bytes calldata randomnessTx) external onlyRole(RANDOMNESS_ROLE) {
-        sequencingAddress.processTransaction(randomnessTx);
+    function processRandomTransaction(bytes calldata randomTransaction) external onlyRole(RANDOM_ADMIN_ROLE) {
+        sequencingAddress.processTransaction(randomTransaction);
 
         if (mempool.length != 0) {
             sequencingAddress.processTransactionsBulk(mempool);
@@ -98,7 +98,7 @@ contract RandomnessSequencer is AccessControl, ISequencingChain {
         return selector;
     }
 
-    function processTransactionsBulk(bytes[] calldata txns) external override onlyRole(SEQUENCER_ROLE) {
+    function processTransactionsBulk(bytes[] calldata txns) external override onlyRole(SEQUENCER_ADMIN_ROLE) {
         _processTransactionsBulk(txns);
     }
 
@@ -108,7 +108,7 @@ contract RandomnessSequencer is AccessControl, ISequencingChain {
         }
     }
 
-    function processTransaction(bytes calldata txn) public override onlyRole(SEQUENCER_ROLE) {
+    function processTransaction(bytes calldata txn) public override onlyRole(SEQUENCER_ADMIN_ROLE) {
         _processTransaction(txn);
     }
 

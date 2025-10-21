@@ -1,6 +1,11 @@
-contracts/lib
-contracts/cache
-contracts/out
+lib
+cache
+out
+broadcast
 
 .env
 .env.local
+
+PROCESS.md
+
+lit_storage.db

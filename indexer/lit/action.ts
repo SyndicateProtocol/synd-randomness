@@ -1,5 +1,11 @@
 // @ts-nocheck
 const _litActionCode = async () => {
+  function logIfDebug(...params) {
+    if (DEBUG) {
+      console.log(...params)
+    }
+  }
+
   try {
     const PKPETHAddress = ethers.utils.computeAddress(PKP_PUBLIC_KEY)
 
@@ -13,6 +19,15 @@ const _litActionCode = async () => {
       chainId,
       sigName
     }) {
+      logIfDebug("Creating and signing transaction", {
+        rpcUrl,
+        contractAddress,
+        abi,
+        functionName,
+        functionArgs,
+        chainId,
+        sigName
+      })
       const unsignedTransactionResponse = await Lit.Actions.runOnce(
         { waitForResponse: true, name: `${sigName}Generator` },
         async () => {
@@ -26,15 +41,17 @@ const _litActionCode = async () => {
               ethersProvider
             )
             const data = iface.encodeFunctionData(functionName, functionArgs)
-
+            logIfDebug("Encoded function data", data)
             const estimatedGas = await contract.estimateGas[functionName](
               ...functionArgs,
               { from: PKPETHAddress }
             )
+            logIfDebug("Estimated gas", estimatedGas)
             const feeData = await ethersProvider.getFeeData()
+            logIfDebug("Fee data", feeData)
             const nonce =
               await ethersProvider.getTransactionCount(PKPETHAddress)
-
+            logIfDebug("Nonce", nonce)
             const unsignedTransaction = {
               to: contractAddress,
               gasLimit: estimatedGas * 2,
@@ -45,12 +62,17 @@ const _litActionCode = async () => {
               type: 2,
               data
             }
+            logIfDebug("Unsigned transaction", unsignedTransaction)
             return JSON.stringify(unsignedTransaction)
           } catch (error) {
             return `Error: Could not generate unsigned transaction: ${error.message}`
           }
         }
       )
+
+      if (unsignedTransactionResponse.includes("Error")) {
+        throw new Error(unsignedTransactionResponse)
+      }
 
       const unsignedTransaction = JSON.parse(unsignedTransactionResponse)
       const serializedTx =
@@ -84,6 +106,7 @@ const _litActionCode = async () => {
     }
 
     async function getRandomessTransaction() {
+      logIfDebug("Getting randomness transaction from LIT ACTION")
       const randomness = await Lit.Actions.runOnce(
         { waitForResponse: true, name: "randomnessGenerator" },
         async () => {
@@ -93,10 +116,12 @@ const _litActionCode = async () => {
             const { signature } = resp
             if (!signature) {
               Lit.Actions.setResponse({
-                response: "No signature found"
+                response: "No drand signature found",
               })
               return
             }
+
+            logIfDebug("Drand signature found", signature)
 
             // 2. Process drand signature
             const signatureBytes = hexToBytes(signature)
@@ -109,16 +134,21 @@ const _litActionCode = async () => {
               .map((b) => b.toString(16).padStart(2, "0"))
               .join("")
 
+            logIfDebug("Drand randomness", drandRandomness)
+
             // 3. Generate local randomness using Web Crypto API
             const localRandomBytes = crypto.getRandomValues(new Uint8Array(32))
             const localRandomHex = Array.from(localRandomBytes)
               .map((b) => b.toString(16).padStart(2, "0"))
               .join("")
 
+            logIfDebug("Local randomness", localRandomHex)
+
             // 4. Combine both randomness sources using HMAC
             const combinedData = new TextEncoder().encode(
               drandRandomness + localRandomHex
             )
+            logIfDebug("Combined data", combinedData)
             const key = await crypto.subtle.importKey(
               "raw",
               new TextEncoder().encode("drand-local-combiner"),
@@ -164,6 +194,8 @@ const _litActionCode = async () => {
               .map((b) => b.toString(16).padStart(2, "0"))
               .join("")}`
 
+            logIfDebug("Final randomness", finalRandomnessHex)
+
             return finalRandomnessHex
           } catch (error) {
             return `Error: Could not generate randomness: ${error.message}`
@@ -171,33 +203,41 @@ const _litActionCode = async () => {
         }
       )
 
+      logIfDebug("Creating and signing transaction for randomness transaction")
       return await createAndSignTransaction({
         chainId: APPCHAIN_CHAIN_ID,
         rpcUrl: APPCHAIN_RPC_URL,
-        contractAddress: RANDOMNESS_SEQUENCER_ADDRESS,
+        contractAddress: RANDOM_CONTRACT_ADDRESS,
         abi: ["function setRandom(uint256 _random) external"],
         functionName: "setRandom",
         functionArgs: [BigInt(randomness)],
-        sigName: "setRandomnessTransaction"
+        sigName: "setRandomTransaction"
       })
     }
 
-    async function getRandomnessSequencerTransaction(randomnessTx) {
+    async function getRandomnessSequencerTransaction(randomTransaction) {
+      logIfDebug("Getting randomness sequencer transaction from LIT ACTION")
       return await createAndSignTransaction({
         chainId: SEQUENCING_CHAIN_ID,
         rpcUrl: SEQUENCING_CHAIN_RPC_URL,
-        contractAddress: RANDOMNESS_SEQUENCER_ADDRESS,
-        abi: ["function addRandomness(bytes randomnessTx) external"],
-        functionName: "addRandomness",
-        functionArgs: [randomnessTx],
-        sigName: "addBundlerTransaction"
+        contractAddress: RANDOMNESS_SEQUENCER_CONTRACT_ADDRESS,
+        abi: ["function processRandomTransaction(bytes randomTransaction) external"],
+        functionName: "processRandomTransaction",
+        functionArgs: [randomTransaction],
+        sigName: "processRandomTransaction"
       })
     }
 
+    logIfDebug("Getting randomness transaction from LIT ACTION...")
     const randomnessTransaction = await getRandomessTransaction()
-    const sequencerTransaction = await getSequencerTransaction(
+    logIfDebug("Got randomness transaction from LIT ACTION")
+    const sequencerTransaction = await getRandomnessSequencerTransaction(
       randomnessTransaction
     )
+
+    logIfDebug("randomnessTransaction", randomnessTransaction)
+    logIfDebug("sequencerTransaction", sequencerTransaction)
+    logIfDebug("timestamp", Date.now())
 
     Lit.Actions.setResponse({
       response: JSON.stringify({

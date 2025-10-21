@@ -49,87 +49,87 @@ contract RandomnessSequencerTest is Test {
 
     function testConstructor() public view {
         assertEq(address(sequencer.sequencingAddress()), address(mockChain));
-        assertTrue(sequencer.hasRole(sequencer.RANDOMNESS_ROLE(), randomnessRole));
-        assertTrue(sequencer.hasRole(sequencer.SEQUENCER_ROLE(), sequencerRole));
+        assertTrue(sequencer.hasRole(sequencer.RANDOM_ADMIN_ROLE(), randomnessRole));
+        assertTrue(sequencer.hasRole(sequencer.SEQUENCER_ADMIN_ROLE(), sequencerRole));
         assertTrue(sequencer.hasRole(sequencer.FUNCTION_SELECTOR_ADMIN_ROLE(), functionSelectorAdmin));
         assertTrue(sequencer.hasRole(sequencer.DEFAULT_ADMIN_ROLE(), admin));
     }
 
-    function testAddFunctionSelector() public {
+    function testAddToFunctionAllowlist() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(keccak256("testFunction()"));
 
         vm.prank(functionSelectorAdmin);
         vm.expectEmit(true, true, false, true);
         emit FunctionSelectorAdded(targetContract, selector);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         assertTrue(sequencer.isRandomnessRequired(targetContract, selector));
 
-        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getRandomnessRequiredFunctions();
+        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getAllowlistedFunctions();
         assertEq(funcs.length, 1);
         assertEq(funcs[0].contractAddress, targetContract);
         assertEq(funcs[0].selector, selector);
     }
 
-    function testAddFunctionSelectorUnauthorized() public {
+    function testAddToFunctionAllowlistUnauthorized() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(keccak256("testFunction()"));
 
         vm.prank(unauthorized);
         vm.expectRevert();
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
     }
 
-    function testAddFunctionSelectorAlreadyExists() public {
+    function testAddToFunctionAllowlistAlreadyExists() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(keccak256("testFunction()"));
 
         vm.prank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         vm.prank(functionSelectorAdmin);
         vm.expectRevert("Function already added");
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
     }
 
-    function testRemoveFunctionSelector() public {
+    function testRemoveFromFunctionAllowlist() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(keccak256("testFunction()"));
 
         vm.prank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         vm.prank(functionSelectorAdmin);
         vm.expectEmit(true, true, false, true);
         emit FunctionSelectorRemoved(targetContract, selector);
-        sequencer.removeFunctionSelector(targetContract, selector);
+        sequencer.removeFromFunctionAllowlist(targetContract, selector);
 
         assertFalse(sequencer.isRandomnessRequired(targetContract, selector));
 
-        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getRandomnessRequiredFunctions();
+        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getAllowlistedFunctions();
         assertEq(funcs.length, 0);
     }
 
-    function testRemoveFunctionSelectorUnauthorized() public {
+    function testRemoveFromFunctionAllowlistUnauthorized() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(keccak256("testFunction()"));
 
         vm.prank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         vm.prank(unauthorized);
         vm.expectRevert();
-        sequencer.removeFunctionSelector(targetContract, selector);
+        sequencer.removeFromFunctionAllowlist(targetContract, selector);
     }
 
-    function testRemoveFunctionSelectorNotFound() public {
+    function testRemoveFromFunctionAllowlistNotFound() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(keccak256("testFunction()"));
 
         vm.prank(functionSelectorAdmin);
         vm.expectRevert("Function not found");
-        sequencer.removeFunctionSelector(targetContract, selector);
+        sequencer.removeFromFunctionAllowlist(targetContract, selector);
     }
 
     function testProcessTransactionWithoutRandomnessRequired() public {
@@ -149,7 +149,7 @@ contract RandomnessSequencerTest is Test {
 
         // Add function selector to require randomness
         vm.prank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         bytes memory txn = _createMockTransaction(targetContract, abi.encodePacked(selector));
 
@@ -191,13 +191,13 @@ contract RandomnessSequencerTest is Test {
         sequencer.processTransactionsBulk(txns);
     }
 
-    function testAddRandomnessProcessesMempool() public {
+    function testProcessRandomTransactionProcessesMempool() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(hex"12345678");
 
         // Add function selector to require randomness
         vm.prank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         // Add transactions to mempool
         bytes memory txn1 = _createMockTransaction(targetContract, abi.encodePacked(selector));
@@ -216,7 +216,7 @@ contract RandomnessSequencerTest is Test {
         vm.prank(randomnessRole);
         vm.expectEmit(false, false, false, false);
         emit MempoolCleared();
-        sequencer.addRandomness(randomnessTx);
+        sequencer.processRandomTransaction(randomnessTx);
 
         // Mempool should be cleared
         assertEq(sequencer.getMempoolLength(), 0);
@@ -226,19 +226,19 @@ contract RandomnessSequencerTest is Test {
         assertEq(mockChain.getProcessedBulkCount(), 1); // mempool bulk
     }
 
-    function testAddRandomnessUnauthorized() public {
+    function testProcessRandomTransactionUnauthorized() public {
         bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
 
         vm.prank(unauthorized);
         vm.expectRevert();
-        sequencer.addRandomness(randomnessTx);
+        sequencer.processRandomTransaction(randomnessTx);
     }
 
-    function testAddRandomnessWithEmptyMempool() public {
+    function testProcessRandomTransactionWithEmptyMempool() public {
         bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
 
         vm.prank(randomnessRole);
-        sequencer.addRandomness(randomnessTx);
+        sequencer.processRandomTransaction(randomnessTx);
 
         assertEq(mockChain.getProcessedCount(), 1);
         assertEq(mockChain.getProcessedBulkCount(), 0);
@@ -246,12 +246,11 @@ contract RandomnessSequencerTest is Test {
 
     function testTransactionNoncesIncrement() public {
         address targetContract = address(0x123);
-        address player = address(0x456);
         bytes4 selector = bytes4(hex"12345678");
 
         // Add function selector to require randomness
         vm.prank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(targetContract, selector);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
 
         // Process multiple transactions
         bytes memory txn1 = _createMockTransaction(targetContract, abi.encodePacked(selector));
@@ -261,9 +260,6 @@ contract RandomnessSequencerTest is Test {
         sequencer.processTransaction(txn1);
         vm.prank(sequencerRole);
         sequencer.processTransaction(txn2);
-
-        // Note: transactionNonces tracking requires actual transaction decoding
-        // This is a simplified test - actual nonce verification would need valid signed transactions
     }
 
     function testMultipleFunctionSelectors() public {
@@ -273,11 +269,11 @@ contract RandomnessSequencerTest is Test {
         bytes4 selector2 = bytes4(hex"22222222");
 
         vm.startPrank(functionSelectorAdmin);
-        sequencer.addFunctionSelector(contract1, selector1);
-        sequencer.addFunctionSelector(contract2, selector2);
+        sequencer.addToFunctionAllowlist(contract1, selector1);
+        sequencer.addToFunctionAllowlist(contract2, selector2);
         vm.stopPrank();
 
-        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getRandomnessRequiredFunctions();
+        RandomnessSequencer.ContractFunction[] memory funcs = sequencer.getAllowlistedFunctions();
         assertEq(funcs.length, 2);
     }
 

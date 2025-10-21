@@ -5,24 +5,24 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IRandom} from "./interfaces/IRandom.sol";
 
 contract Random is AccessControl, IRandom {
-    bytes32 public constant RANDOMNESS_ADMIN_ROLE = keccak256("RANDOMNESS_ADMIN_ROLE");
+    bytes32 public constant RANDOM_ADMIN_ROLE = keccak256("RANDOM_ADMIN_ROLE");
     uint256 public random;
 
-    modifier onlyRandomnessAdmin() {
-        _onlyRandomnessAdmin();
+    modifier onlyRandomAdmin() {
+        _onlyRandomAdmin();
         _;
     }
 
-    function _onlyRandomnessAdmin() internal view {
-        require(hasRole(RANDOMNESS_ADMIN_ROLE, msg.sender), "Caller is not the randomness admin");
+    function _onlyRandomAdmin() internal view {
+        require(hasRole(RANDOM_ADMIN_ROLE, msg.sender), "Caller is not the randomness admin");
     }
 
-    constructor(address randomnessAdmin) {
-        _grantRole(DEFAULT_ADMIN_ROLE, randomnessAdmin);
-        _grantRole(RANDOMNESS_ADMIN_ROLE, randomnessAdmin);
+    constructor(address randomAdmin, address admin) {
+        _grantRole(RANDOM_ADMIN_ROLE, randomAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
-    function setRandom(uint256 _random) external onlyRandomnessAdmin {
+    function setRandom(uint256 _random) external onlyRandomAdmin {
         random = _random;
     }
 }

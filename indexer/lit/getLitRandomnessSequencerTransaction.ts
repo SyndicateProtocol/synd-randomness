@@ -8,10 +8,13 @@ import { LIT_ABILITY, LIT_NETWORK, LIT_RPC } from "@lit-protocol/constants"
 import { LitNodeClient } from "@lit-protocol/lit-node-client"
 import * as ethers from "ethers"
 import { LocalStorage } from "node-localstorage"
-//@ts-ignore
+// @ts-ignore
+import Hash from "ipfs-only-hash"
 import type { Hex } from "viem"
 import env from "../env"
 import { litActionCode } from "./action"
+
+console.log("Lit Action CID", await Hash.of(litActionCode))
 
 export async function getLitRandomnessSequencerTransaction() {
   const client = new LitNodeClient({
@@ -62,35 +65,46 @@ export async function getLitRandomnessSequencerTransaction() {
       })
     }
   })
-  const { success, response } = await client.executeJs({
+  const { success, response, logs } = await client.executeJs({
     sessionSigs,
     code: litActionCode,
     jsParams: {
-      RANDOMNESS_SEQUENCER_ADDRESS: env.RANDOMNESS_SEQUENCER_ADDRESS,
+      RANDOM_CONTRACT_ADDRESS: env.RANDOM_CONTRACT_ADDRESS,
+      RANDOMNESS_SEQUENCER_CONTRACT_ADDRESS: env.RANDOMNESS_SEQUENCER_CONTRACT_ADDRESS,
       APPCHAIN_RPC_URL: env.APPCHAIN_RPC_URL,
       APPCHAIN_CHAIN_ID: env.APPCHAIN_CHAIN_ID,
       SEQUENCING_CHAIN_RPC_URL: env.SEQUENCING_CHAIN_RPC_URL,
       SEQUENCING_CHAIN_ID: env.SEQUENCING_CHAIN_ID,
       PKP_PUBLIC_KEY: env.LIT_PKP_PUBLIC_KEY,
-      DRAND_API_URL: env.DRAND_API_URL
+      DRAND_API_URL: env.DRAND_API_URL,
+      DEBUG: env.LIT_DEBUG
     }
   })
-  if (!success) {
-    throw new Error("Failed to execute LIT action")
-  }
-  const { sequencerTransaction, randomnessTransaction, timestamp } = JSON.parse(response as string) as {
-    sequencerTransaction: Hex,
-    randomnessTransaction: Hex,
-    timestamp: number
-  }
-  
-  if (!sequencerTransaction) {
-    throw new Error("No sequencer transaction found")
+
+  if (process.env.LIT_DEBUG) {
+    console.log("response", response)
+    console.log("logs", logs)
   }
 
-  return {
-    sequencerTransaction,
-    randomnessTransaction,
-    timestamp
+  if (!success) {
+    console.error("Failed to execute LIT action", response)
+    throw new Error("Failed to execute LIT action")
+  }
+
+  try {
+    const { sequencerTransaction, randomnessTransaction, timestamp } = JSON.parse(response as string) as {
+      sequencerTransaction: Hex,
+      randomnessTransaction: Hex,
+      timestamp: number
+    }
+
+      return {
+      sequencerTransaction,
+      randomnessTransaction,
+      timestamp
+    }
+  } catch (error) {
+    console.warn("Got response", response)
+    throw new Error(response as string)
   }
 }

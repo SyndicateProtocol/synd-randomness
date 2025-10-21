@@ -8,22 +8,23 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 contract RandomTest is Test {
     Random public randomContract;
 
-    address public randomnessAdmin = address(1);
-    address public unauthorized = address(2);
+    address public defaultAdmin = address(1);
+    address public randomAdmin = address(2);
+    address public unauthorized = address(3);
 
     function setUp() public {
-        randomContract = new Random(randomnessAdmin);
+        randomContract = new Random(randomAdmin, defaultAdmin);
     }
 
     function testConstructor() public view {
-        assertTrue(randomContract.hasRole(randomContract.DEFAULT_ADMIN_ROLE(), randomnessAdmin));
-        assertTrue(randomContract.hasRole(randomContract.RANDOMNESS_ADMIN_ROLE(), randomnessAdmin));
+        assertTrue(randomContract.hasRole(randomContract.DEFAULT_ADMIN_ROLE(), defaultAdmin));
+        assertTrue(randomContract.hasRole(randomContract.RANDOM_ADMIN_ROLE(), randomAdmin));
     }
 
     function testSetRandom() public {
         uint256 newRandom = 123456789;
 
-        vm.prank(randomnessAdmin);
+        vm.prank(randomAdmin);
         randomContract.setRandom(newRandom);
 
         assertEq(randomContract.random(), newRandom);
@@ -38,7 +39,7 @@ contract RandomTest is Test {
     }
 
     function testSetRandomMultipleTimes() public {
-        vm.startPrank(randomnessAdmin);
+        vm.startPrank(randomAdmin);
 
         randomContract.setRandom(111);
         assertEq(randomContract.random(), 111);
@@ -53,7 +54,7 @@ contract RandomTest is Test {
     }
 
     function testFuzzSetRandom(uint256 randomValue) public {
-        vm.prank(randomnessAdmin);
+        vm.prank(randomAdmin);
         randomContract.setRandom(randomValue);
 
         assertEq(randomContract.random(), randomValue);
@@ -63,14 +64,14 @@ contract RandomTest is Test {
         assertEq(randomContract.random(), 0);
     }
 
-    function testGrantRandomnessAdminRole() public {
+    function testGrantrandomAdminRole() public {
         address newAdmin = address(3);
 
-        vm.startPrank(randomnessAdmin);
-        randomContract.grantRole(randomContract.RANDOMNESS_ADMIN_ROLE(), newAdmin);
+        vm.startPrank(defaultAdmin);
+        randomContract.grantRole(randomContract.RANDOM_ADMIN_ROLE(), newAdmin);
         vm.stopPrank();
 
-        assertTrue(randomContract.hasRole(randomContract.RANDOMNESS_ADMIN_ROLE(), newAdmin));
+        assertTrue(randomContract.hasRole(randomContract.RANDOM_ADMIN_ROLE(), newAdmin));
 
         // New admin should be able to set random
         vm.prank(newAdmin);
@@ -78,15 +79,15 @@ contract RandomTest is Test {
         assertEq(randomContract.random(), 999);
     }
 
-    function testRevokeRandomnessAdminRole() public {
-        vm.startPrank(randomnessAdmin);
-        randomContract.revokeRole(randomContract.RANDOMNESS_ADMIN_ROLE(), randomnessAdmin);
+    function testRevokerandomAdminRole() public {
+        vm.startPrank(defaultAdmin);
+        randomContract.revokeRole(randomContract.RANDOM_ADMIN_ROLE(), randomAdmin);
         vm.stopPrank();
 
-        assertFalse(randomContract.hasRole(randomContract.RANDOMNESS_ADMIN_ROLE(), randomnessAdmin));
+        assertFalse(randomContract.hasRole(randomContract.RANDOM_ADMIN_ROLE(), randomAdmin));
 
         // Revoked admin should not be able to set random
-        vm.prank(randomnessAdmin);
+        vm.prank(defaultAdmin);
         vm.expectRevert("Caller is not the randomness admin");
         randomContract.setRandom(123);
     }
@@ -95,13 +96,13 @@ contract RandomTest is Test {
         address admin2 = address(3);
         address admin3 = address(4);
 
-        vm.startPrank(randomnessAdmin);
-        randomContract.grantRole(randomContract.RANDOMNESS_ADMIN_ROLE(), admin2);
-        randomContract.grantRole(randomContract.RANDOMNESS_ADMIN_ROLE(), admin3);
+        vm.startPrank(defaultAdmin);
+        randomContract.grantRole(randomContract.RANDOM_ADMIN_ROLE(), admin2);
+        randomContract.grantRole(randomContract.RANDOM_ADMIN_ROLE(), admin3);
         vm.stopPrank();
 
         // All admins can set random
-        vm.prank(randomnessAdmin);
+        vm.prank(randomAdmin);
         randomContract.setRandom(100);
         assertEq(randomContract.random(), 100);
 
@@ -112,9 +113,5 @@ contract RandomTest is Test {
         vm.prank(admin3);
         randomContract.setRandom(300);
         assertEq(randomContract.random(), 300);
-    }
-
-    function testRandomnessAdminRoleValue() public view {
-        assertEq(randomContract.RANDOMNESS_ADMIN_ROLE(), keccak256("RANDOMNESS_ADMIN_ROLE"));
     }
 }

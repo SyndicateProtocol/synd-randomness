@@ -14,7 +14,7 @@ export default createConfig({
     RandomnessSequencer: {
       chain: "syndicate",
       abi: RandomnessSequencerAbi,
-      address: env.RANDOMNESS_SEQUENCER_ADDRESS,
+      address: env.RANDOMNESS_SEQUENCER_CONTRACT_ADDRESS,
       // we only want to inject randomness from the latest block
       startBlock: "latest",
     },

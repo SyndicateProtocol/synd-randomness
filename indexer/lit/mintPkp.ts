@@ -10,9 +10,14 @@ import { ethers } from "ethers"
 import Hash from "ipfs-only-hash"
 import { litActionCode } from "./action"
 
-export async function createPkp() {
+const privateKey = process.env.LIT_PRIVATE_KEY as string
+if (!privateKey) {
+  throw new Error("LIT_PRIVATE_KEY is not set")
+}
+
+export async function mintPkp() {
   const ethersWallet = new ethers.Wallet(
-    process.env.LIT_PRIVATE_KEY as string,
+    privateKey,
     new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE)
   )
   const litContracts = new LitContracts({
@@ -21,20 +26,23 @@ export async function createPkp() {
   })
   await litContracts.connect()
   const mintCost = await litContracts.pkpNftContract.read.mintCost()
-  const ipfsCid = await Hash.of(litActionCode)
-  // The context in which the lit action is run, changes its CID. This CID is the current
-  // lit action code running via the indexer.
-  const productionIPFSCID = "CID_FROM_PRODUCTION_HERE"
+  const ipfsCidLocal = await Hash.of(litActionCode)
+  // The context in which the lit action is run, could change its CID. 
+  // It's possible you'll need to mint a new PKP and add a different CID here.
+  // Without these permissions correct, the Lit Action will not be able to sign the transactions.
+  console.log("minting PKP...")
+  const cids = [
+    ipfsCidLocal,
+    // running via the indexer locally
+    "QmWnZPUgqkeQAbMJA38HFNbAgLand9KzAHvbkw72eqzPXc"
+  ]
   const txn =
     await litContracts.pkpHelperContract.write.mintNextAndAddAuthMethods(
       AUTH_METHOD_TYPE.LitAction,
-      [AUTH_METHOD_TYPE.LitAction, AUTH_METHOD_TYPE.LitAction],
-      [
-        ethers.utils.base58.decode(ipfsCid),
-        ethers.utils.base58.decode(productionIPFSCID)
-      ],
-      ["0x", "0x"],
-      [[AUTH_METHOD_SCOPE.SignAnything], [AUTH_METHOD_SCOPE.SignAnything]],
+      cids.map(() => AUTH_METHOD_TYPE.LitAction),
+      cids.map((cid) => ethers.utils.base58.decode(cid)),
+      cids.map(() => "0x"),
+      cids.map(() => [AUTH_METHOD_SCOPE.SignAnything]),
       false,
       true,
       { value: mintCost, gasLimit: 4000000 }
@@ -57,7 +65,7 @@ export async function createPkp() {
   console.log("PKP Info:", pkpInfo)
 }
 
-createPkp()
+mintPkp()
   .then(() => {
     process.exit(0)
   })
