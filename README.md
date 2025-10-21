@@ -6,18 +6,18 @@ A verifiable randomness system built on Syndicate's sequencing infrastructure us
 
 The system uses a cross-chain architecture to provide verifiable randomness to smart contracts:
 
-### ⚡ Sequencing Chain (Risa)
+### ⚡ Sequencing Chain
 Handles transaction sequencing and randomness coordination:
 - **RandomnessSequencer.sol** - Manages transaction mempool and randomness injection
 - **RLPTxBreakdown.sol** - Utilities for decoding RLP transaction data
 - **RLPReader.sol** - RLP decoding utilities
 
-### 🎲 Application Chain (Pacifica)
+### 🎲 Appchain
 Consumes randomness for on-chain applications:
 - **Random.sol** - Stores and provides verifiable randomness
 - **DoSomethingWithRandom.sol** - Example contract demonstrating randomness consumption
 
-### 📡 Indexer (Ponder)
+### 📡 Indexer (Ponder.sh)
 Monitors and responds to randomness requests:
 - Watches for `MempoolUpdated` events on RandomnessSequencer
 - Triggers Lit Protocol PKP to generate and inject randomness

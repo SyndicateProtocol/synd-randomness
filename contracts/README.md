@@ -72,8 +72,8 @@ cp .env.example .env
 Required variables:
 ```env
 # RPC URLs
-SEQUENCING_CHAIN_RPC_URL=<risa-rpc-url>
-APPCHAIN_RPC_URL=<pacifica-rpc-url>
+SEQUENCING_CHAIN_RPC_URL=<sequencing-chain-rpc-url>
+APPCHAIN_RPC_URL=<appchain-rpc-url>
 
 # Private Keys
 DEPLOYER_PRIVATE_KEY=<deployer-private-key>
@@ -129,10 +129,10 @@ All deployment and configuration is handled via the Makefile. See the [Makefile]
 # Deploy RandomnessSequencer (on Risa)
 make deploy-sequencer
 
-# Deploy Random (on Pacifica)
+# Deploy Random (on appchain)
 make deploy-random
 
-# Deploy example contract (on Pacifica)
+# Deploy example contract (on appchain)
 make deploy-do-something-with-random
 ```
 

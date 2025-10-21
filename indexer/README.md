@@ -20,8 +20,8 @@ When a randomness request is detected:
 - Lit Action executes to generate random data
 - PKP signs the randomness transaction
 - Transaction is submitted to both chains:
-  - Random value to the Random contract (Pacifica)
-  - Trigger to the RandomnessSequencer (Risa)
+  - Random value to the Random contract (appchain)
+  - Trigger to the RandomnessSequencer (sequencing chain)
 
 ## Setup
 
@@ -52,8 +52,8 @@ Required variables:
 ```env
 # Chain Configuration
 SEQUENCING_CHAIN_ID=<chain-id>
-SEQUENCING_CHAIN_RPC_URL=<risa-rpc-url>
-APPCHAIN_RPC_URL=<pacifica-rpc-url>
+SEQUENCING_CHAIN_RPC_URL=<sequencing-chain-rpc-url>
+APPCHAIN_RPC_URL=<appchain-rpc-url>
 APPCHAIN_CHAIN_ID=<chain-id>
 
 # Contract Addresses
@@ -91,17 +91,17 @@ This will:
 
 #### Fund the PKP
 
-The PKP needs native tokens on both chains to send transactions. Send ETH to the `LIT_PKP_ETH_ADDRESS` on both Risa (sequencing chain) and Pacifica (application chain).
+The PKP needs native tokens on both chains to send transactions. Send ETH to the `LIT_PKP_ETH_ADDRESS` on both the sequencing chain and appchain.
 
 #### Grant PKP Permissions
 
 The PKP needs the `RANDOM_ADMIN_ROLE` on both contracts. From the contracts directory, run:
 
 ```bash
-# Grant RANDOM_ADMIN_ROLE on RandomnessSequencer (Risa)
+# Grant RANDOM_ADMIN_ROLE on RandomnessSequencer (sequencing chain)
 make add-randomness-sequencer-admin
 
-# Grant RANDOM_ADMIN_ROLE on Random (Pacifica)
+# Grant RANDOM_ADMIN_ROLE on Random (appchain)
 make add-random-admin
 ```
 
