@@ -134,7 +134,7 @@ contract RandomnessSequencerTest is Test {
 
     function testProcessTransactionWithoutRandomnessRequired() public {
         // Create a simple EIP-1559 transaction
-        bytes memory txn = _createMockTransaction(address(0x123), hex"12345678");
+        bytes memory txn = _createType2MockTransaction(address(0x123), hex"12345678");
 
         vm.prank(sequencerRole);
         sequencer.processTransaction(txn);
@@ -151,7 +151,7 @@ contract RandomnessSequencerTest is Test {
         vm.prank(functionSelectorAdmin);
         sequencer.addToFunctionAllowlist(targetContract, selector);
 
-        bytes memory txn = _createMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
 
         vm.prank(sequencerRole);
         vm.expectEmit(false, false, false, true);
@@ -163,7 +163,7 @@ contract RandomnessSequencerTest is Test {
     }
 
     function testProcessTransactionUnauthorized() public {
-        bytes memory txn = _createMockTransaction(address(0x123), hex"12345678");
+        bytes memory txn = _createType2MockTransaction(address(0x123), hex"12345678");
 
         vm.prank(unauthorized);
         vm.expectRevert();
@@ -172,8 +172,8 @@ contract RandomnessSequencerTest is Test {
 
     function testProcessTransactionsBulk() public {
         bytes[] memory txns = new bytes[](2);
-        txns[0] = _createMockTransaction(address(0x123), hex"12345678");
-        txns[1] = _createMockTransaction(address(0x456), hex"87654321");
+        txns[0] = _createType2MockTransaction(address(0x123), hex"12345678");
+        txns[1] = _createType2MockTransaction(address(0x456), hex"87654321");
 
         vm.prank(sequencerRole);
         sequencer.processTransactionsBulk(txns);
@@ -184,7 +184,7 @@ contract RandomnessSequencerTest is Test {
 
     function testProcessTransactionsBulkUnauthorized() public {
         bytes[] memory txns = new bytes[](1);
-        txns[0] = _createMockTransaction(address(0x123), hex"12345678");
+        txns[0] = _createType2MockTransaction(address(0x123), hex"12345678");
 
         vm.prank(unauthorized);
         vm.expectRevert();
@@ -200,8 +200,8 @@ contract RandomnessSequencerTest is Test {
         sequencer.addToFunctionAllowlist(targetContract, selector);
 
         // Add transactions to mempool
-        bytes memory txn1 = _createMockTransaction(targetContract, abi.encodePacked(selector));
-        bytes memory txn2 = _createMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn1 = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn2 = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
 
         vm.prank(sequencerRole);
         sequencer.processTransaction(txn1);
@@ -211,7 +211,7 @@ contract RandomnessSequencerTest is Test {
         assertEq(sequencer.getMempoolLength(), 2);
 
         // Add randomness transaction
-        bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
+        bytes memory randomnessTx = _createType2MockTransaction(address(0x999), hex"abcdef");
 
         vm.prank(randomnessRole);
         vm.expectEmit(false, false, false, false);
@@ -227,7 +227,7 @@ contract RandomnessSequencerTest is Test {
     }
 
     function testProcessRandomTransactionUnauthorized() public {
-        bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
+        bytes memory randomnessTx = _createType2MockTransaction(address(0x999), hex"abcdef");
 
         vm.prank(unauthorized);
         vm.expectRevert();
@@ -235,7 +235,7 @@ contract RandomnessSequencerTest is Test {
     }
 
     function testProcessRandomTransactionWithEmptyMempool() public {
-        bytes memory randomnessTx = _createMockTransaction(address(0x999), hex"abcdef");
+        bytes memory randomnessTx = _createType2MockTransaction(address(0x999), hex"abcdef");
 
         vm.prank(randomnessRole);
         sequencer.processRandomTransaction(randomnessTx);
@@ -253,8 +253,8 @@ contract RandomnessSequencerTest is Test {
         sequencer.addToFunctionAllowlist(targetContract, selector);
 
         // Process multiple transactions
-        bytes memory txn1 = _createMockTransaction(targetContract, abi.encodePacked(selector));
-        bytes memory txn2 = _createMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn1 = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory txn2 = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
 
         vm.prank(sequencerRole);
         sequencer.processTransaction(txn1);
@@ -277,8 +277,123 @@ contract RandomnessSequencerTest is Test {
         assertEq(funcs.length, 2);
     }
 
-    // Helper function to create a real RLP-encoded EIP-1559 transaction
-    function _createMockTransaction(address to, bytes memory data) internal view returns (bytes memory) {
+    function testProcessLegacyTransactionWithoutRandomnessRequired() public {
+        // Create a legacy transaction
+        bytes memory txn = _createLegacyMockTransaction(address(0x123), hex"12345678");
+
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn);
+
+        assertEq(sequencer.getMempoolLength(), 0);
+        assertEq(mockChain.getProcessedCount(), 1);
+    }
+
+    function testProcessLegacyTransactionWithRandomnessRequired() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(hex"12345678");
+
+        // Add function selector to require randomness
+        vm.prank(functionSelectorAdmin);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
+
+        bytes memory txn = _createLegacyMockTransaction(targetContract, abi.encodePacked(selector));
+
+        vm.prank(sequencerRole);
+        vm.expectEmit(false, false, false, true);
+        emit MempoolUpdated(1, txn);
+        sequencer.processTransaction(txn);
+
+        assertEq(sequencer.getMempoolLength(), 1);
+        assertEq(mockChain.getProcessedCount(), 0);
+    }
+
+    function testProcessMixedTransactionTypes() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(hex"12345678");
+
+        // Add function selector to require randomness
+        vm.prank(functionSelectorAdmin);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
+
+        // Add both legacy and EIP-1559 transactions to mempool
+        bytes memory legacyTxn = _createLegacyMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory eip1559Txn = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
+
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(legacyTxn);
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(eip1559Txn);
+
+        assertEq(sequencer.getMempoolLength(), 2);
+
+        // Process randomness transaction
+        bytes memory randomnessTx = _createType2MockTransaction(address(0x999), hex"abcdef");
+
+        vm.prank(randomnessRole);
+        sequencer.processRandomTransaction(randomnessTx);
+
+        // Both transaction types should be processed
+        assertEq(sequencer.getMempoolLength(), 0);
+        assertEq(mockChain.getProcessedCount(), 1);
+        assertEq(mockChain.getProcessedBulkCount(), 1);
+    }
+
+    // Helper function to create a real RLP-encoded legacy transaction (Type 0)
+    function _createLegacyMockTransaction(address to, bytes memory data) internal pure returns (bytes memory) {
+        uint256 privateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80; // Test private key
+
+        // Legacy transaction parameters
+        uint256 chainId = 1;
+        uint256 nonce = 0;
+        uint256 gasPrice = 10 gwei;
+        uint256 gasLimit = 100000;
+        uint256 value = 0;
+
+        // Build the unsigned transaction payload for EIP-155
+        // [nonce, gasPrice, gasLimit, to, value, data, chainId, 0, 0]
+        bytes memory unsignedPayload = abi.encodePacked(
+            _encodeUint(nonce),
+            _encodeUint(gasPrice),
+            _encodeUint(gasLimit),
+            _encodeAddress(to),
+            _encodeUint(value),
+            _encodeBytes(data),
+            _encodeUint(chainId),
+            uint8(0x80), // RLP encoding of 0
+            uint8(0x80) // RLP encoding of 0
+        );
+
+        // Wrap in RLP list
+        bytes memory rlpUnsigned = _encodeList(unsignedPayload);
+
+        // Hash for signing
+        bytes32 txHash = keccak256(rlpUnsigned);
+
+        // Sign the transaction
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, txHash);
+
+        // Calculate EIP-155 v value: chainId * 2 + 35 + {0,1}
+        uint256 vValue = chainId * 2 + 35 + (v - 27);
+
+        // Build the signed transaction (9 items: 6 unsigned - chainId,0,0 + v, r, s)
+        bytes memory signedPayload = abi.encodePacked(
+            _encodeUint(nonce),
+            _encodeUint(gasPrice),
+            _encodeUint(gasLimit),
+            _encodeAddress(to),
+            _encodeUint(value),
+            _encodeBytes(data),
+            _encodeUint(vValue),
+            _encodeBytes32(r),
+            _encodeBytes32(s)
+        );
+
+        // Wrap in RLP list (no type prefix for legacy)
+        return _encodeList(signedPayload);
+    }
+
+    // Helper function to create a real RLP-encoded EIP-1559 transaction (Type 2)
+    function _createType2MockTransaction(address to, bytes memory data) internal pure returns (bytes memory) {
         uint256 privateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80; // Test private key
 
         // EIP-1559 transaction parameters
