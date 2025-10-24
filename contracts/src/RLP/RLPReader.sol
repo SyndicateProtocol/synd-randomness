@@ -35,10 +35,7 @@ library RLPReader {
         uint256 itemLength = _itemLength(ptr);
         self.nextPtr = ptr + itemLength;
 
-        return RLPItem({
-            len: itemLength,
-            memPtr: ptr
-        });
+        return RLPItem({len: itemLength, memPtr: ptr});
     }
 
     /*
@@ -60,10 +57,7 @@ library RLPReader {
             memPtr := add(item, 0x20)
         }
 
-        return RLPItem({
-            len: item.length,
-            memPtr: memPtr
-        });
+        return RLPItem({len: item.length, memPtr: memPtr});
     }
 
     /*
@@ -75,10 +69,7 @@ library RLPReader {
         require(isList(self));
 
         uint256 ptr = self.memPtr + _payloadOffset(self.memPtr);
-        return Iterator({
-            item: self,
-            nextPtr: ptr
-        });
+        return Iterator({item: self, nextPtr: ptr});
     }
 
     /*
@@ -120,10 +111,7 @@ library RLPReader {
         uint256 dataLen;
         for (uint256 i = 0; i < items; i++) {
             dataLen = _itemLength(memPtr);
-            result[i] = RLPItem({
-                len: dataLen,
-                memPtr: memPtr
-            });
+            result[i] = RLPItem({len: dataLen, memPtr: memPtr});
             memPtr = memPtr + dataLen;
         }
 
