@@ -307,6 +307,36 @@ contract RandomnessSequencerTest is Test {
         assertEq(mockChain.getProcessedCount(), 0);
     }
 
+    function testProcessType1TransactionWithoutRandomnessRequired() public {
+        // Create an EIP-2930 transaction
+        bytes memory txn = _createType1MockTransaction(address(0x123), hex"12345678");
+
+        vm.prank(sequencerRole);
+        sequencer.processTransaction(txn);
+
+        assertEq(sequencer.getMempoolLength(), 0);
+        assertEq(mockChain.getProcessedCount(), 1);
+    }
+
+    function testProcessType1TransactionWithRandomnessRequired() public {
+        address targetContract = address(0x123);
+        bytes4 selector = bytes4(hex"12345678");
+
+        // Add function selector to require randomness
+        vm.prank(functionSelectorAdmin);
+        sequencer.addToFunctionAllowlist(targetContract, selector);
+
+        bytes memory txn = _createType1MockTransaction(targetContract, abi.encodePacked(selector));
+
+        vm.prank(sequencerRole);
+        vm.expectEmit(false, false, false, true);
+        emit MempoolUpdated(1, txn);
+        sequencer.processTransaction(txn);
+
+        assertEq(sequencer.getMempoolLength(), 1);
+        assertEq(mockChain.getProcessedCount(), 0);
+    }
+
     function testProcessMixedTransactionTypes() public {
         address targetContract = address(0x123);
         bytes4 selector = bytes4(hex"12345678");
@@ -315,16 +345,19 @@ contract RandomnessSequencerTest is Test {
         vm.prank(functionSelectorAdmin);
         sequencer.addToFunctionAllowlist(targetContract, selector);
 
-        // Add both legacy and EIP-1559 transactions to mempool
+        // Add legacy, EIP-2930, and EIP-1559 transactions to mempool
         bytes memory legacyTxn = _createLegacyMockTransaction(targetContract, abi.encodePacked(selector));
+        bytes memory eip2930Txn = _createType1MockTransaction(targetContract, abi.encodePacked(selector));
         bytes memory eip1559Txn = _createType2MockTransaction(targetContract, abi.encodePacked(selector));
 
         vm.prank(sequencerRole);
         sequencer.processTransaction(legacyTxn);
         vm.prank(sequencerRole);
+        sequencer.processTransaction(eip2930Txn);
+        vm.prank(sequencerRole);
         sequencer.processTransaction(eip1559Txn);
 
-        assertEq(sequencer.getMempoolLength(), 2);
+        assertEq(sequencer.getMempoolLength(), 3);
 
         // Process randomness transaction
         bytes memory randomnessTx = _createType2MockTransaction(address(0x999), hex"abcdef");
@@ -332,10 +365,55 @@ contract RandomnessSequencerTest is Test {
         vm.prank(randomnessRole);
         sequencer.processRandomTransaction(randomnessTx);
 
-        // Both transaction types should be processed
+        // All transaction types should be processed
         assertEq(sequencer.getMempoolLength(), 0);
         assertEq(mockChain.getProcessedCount(), 1);
         assertEq(mockChain.getProcessedBulkCount(), 1);
+    }
+
+    // Helper function to create a real RLP-encoded EIP-2930 transaction (Type 1)
+    function _createType1MockTransaction(address to, bytes memory data) internal pure returns (bytes memory) {
+        uint256 privateKey = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80; // Test private key
+
+        // EIP-2930 transaction parameters
+        uint256 chainId = 1;
+        uint256 nonce = 0;
+        uint256 gasPrice = 10 gwei;
+        uint256 gasLimit = 100000;
+        uint256 value = 0;
+        bytes memory accessList = hex"c0"; // Empty access list
+
+        // Build the unsigned transaction payload (8 items)
+        bytes memory unsignedPayload = abi.encodePacked(
+            _encodeUint(chainId),
+            _encodeUint(nonce),
+            _encodeUint(gasPrice),
+            _encodeUint(gasLimit),
+            _encodeAddress(to),
+            _encodeUint(value),
+            _encodeBytes(data),
+            accessList
+        );
+
+        // Wrap in RLP list
+        bytes memory rlpUnsigned = _encodeList(unsignedPayload);
+
+        // Hash for signing: keccak256(0x01 || rlp(unsigned_tx))
+        bytes32 txHash = keccak256(abi.encodePacked(bytes1(0x01), rlpUnsigned));
+
+        // Sign the transaction
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, txHash);
+
+        // Build the signed transaction (11 items: 8 unsigned + v, r, s)
+        bytes memory signedPayload = abi.encodePacked(
+            unsignedPayload,
+            _encodeUint(v - 27), // EIP-2930 uses v - 27 (0 or 1)
+            _encodeBytes32(r),
+            _encodeBytes32(s)
+        );
+
+        // Wrap in RLP list and prepend 0x01
+        return abi.encodePacked(bytes1(0x01), _encodeList(signedPayload));
     }
 
     // Helper function to create a real RLP-encoded legacy transaction (Type 0)
