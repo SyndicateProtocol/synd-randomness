@@ -114,7 +114,8 @@ contract RandomnessSequencer is AccessControl, ISequencingChain {
 
     function _processTransaction(bytes memory txn) internal {
         RLPTxBreakdown.DecodedTransaction memory decodedTx = RLPTxBreakdown.decodeTx(txn);
-        if (decodedTx.data.length > 0 && !decodedTx.isContractDeployment) {
+        // Skip function selector checking for contract deployments (to == address(0))
+        if (decodedTx.data.length > 0 && decodedTx.to != address(0)) {
             bytes4 selector = getFunctionSelector(decodedTx.data);
             if (isRandomnessRequired[decodedTx.to][selector]) {
                 transactionNonces[decodedTx.to][decodedTx.from][selector]++;

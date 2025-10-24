@@ -27,9 +27,8 @@ library RLPTxBreakdown {
         uint256 gasLimit;
         uint256 value;
         bytes data;
-        address to;
+        address to; // address(0) for contract deployments
         address from;
-        bool isContractDeployment;
     }
 
     /**
@@ -62,8 +61,8 @@ library RLPTxBreakdown {
         RLPReader.RLPItem[] memory items = txItem.toList();
         require(items.length == 11, "Invalid EIP-2930 tx");
 
-        bool isContractDeployment = items[4].toBytes().length == 0;
-        address toAddress = isContractDeployment ? address(0) : items[4].toAddress();
+        // If 'to' field is empty, it's a contract deployment (address(0))
+        address toAddress = items[4].toBytes().length == 0 ? address(0) : items[4].toAddress();
 
         // Build unsigned payload from first 8 RLP items.
         bytes memory unsignedPayload = abi.encodePacked(
@@ -97,8 +96,7 @@ library RLPTxBreakdown {
             value: items[5].toUint(),
             data: items[6].toBytes(),
             to: toAddress,
-            from: _getAddressEIP2930(unsignedPayload, items),
-            isContractDeployment: isContractDeployment
+            from: _getAddressEIP2930(unsignedPayload, items)
         });
     }
 
@@ -114,8 +112,8 @@ library RLPTxBreakdown {
         RLPReader.RLPItem[] memory items = txItem.toList();
         require(items.length == 12, "Invalid EIP-1559 tx");
 
-        bool isContractDeployment = items[5].toBytes().length == 0;
-        address toAddress = isContractDeployment ? address(0) : items[5].toAddress();
+        // If 'to' field is empty, it's a contract deployment (address(0))
+        address toAddress = items[5].toBytes().length == 0 ? address(0) : items[5].toAddress();
 
         // Build unsigned payload from first 9 RLP items.
         bytes memory unsignedPayload = abi.encodePacked(
@@ -148,8 +146,7 @@ library RLPTxBreakdown {
             value: items[6].toUint(),
             data: items[7].toBytes(),
             to: toAddress,
-            from: _getAddressEIP1559(unsignedPayload, items),
-            isContractDeployment: isContractDeployment
+            from: _getAddressEIP1559(unsignedPayload, items)
         });
     }
 
@@ -163,8 +160,8 @@ library RLPTxBreakdown {
         RLPReader.RLPItem[] memory items = txItem.toList();
         require(items.length == 9, "Invalid legacy tx");
 
-        bool isContractDeployment = items[3].toBytes().length == 0;
-        address toAddress = isContractDeployment ? address(0) : items[3].toAddress();
+        // If 'to' field is empty, it's a contract deployment (address(0))
+        address toAddress = items[3].toBytes().length == 0 ? address(0) : items[3].toAddress();
 
         // Build unsigned payload from first 6 RLP items + chainId for EIP-155
         uint256 v = items[6].toUint();
@@ -189,8 +186,7 @@ library RLPTxBreakdown {
             value: items[4].toUint(),
             data: items[5].toBytes(),
             to: toAddress,
-            from: _getAddressLegacy(items, chainId),
-            isContractDeployment: isContractDeployment
+            from: _getAddressLegacy(items, chainId)
         });
     }
 
