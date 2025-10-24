@@ -31,17 +31,6 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Cache Forge dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.foundry
-            contracts/cache
-            contracts/out
-          key: ${{ runner.os }}-foundry-${{ hashFiles('contracts/foundry.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-foundry-
-
       - name: Show Forge version
         run: |
           forge --version
@@ -60,8 +49,3 @@ jobs:
         run: |
           forge test -vvv --gas-report
         id: test
-
-      - name: Run Coverage
-        run: |
-          forge coverage
-        id: coverage
