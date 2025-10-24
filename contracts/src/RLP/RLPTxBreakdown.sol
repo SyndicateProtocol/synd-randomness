@@ -294,7 +294,7 @@ library RLPTxBreakdown {
                 items[2].toRlpBytes(), // gasLimit
                 items[3].toRlpBytes(), // to
                 items[4].toRlpBytes(), // value
-                items[5].toRlpBytes()  // data
+                items[5].toRlpBytes() // data
             );
         } else {
             // EIP-155: [nonce, gasPrice, gasLimit, to, value, data, chainId, 0, 0]
@@ -305,9 +305,9 @@ library RLPTxBreakdown {
                 items[3].toRlpBytes(), // to
                 items[4].toRlpBytes(), // value
                 items[5].toRlpBytes(), // data
-                _encodeUint(chainId),  // chainId
-                uint8(0x80),           // empty value (0)
-                uint8(0x80)            // empty value (0)
+                _encodeUint(chainId), // chainId
+                uint8(0x80), // empty value (0)
+                uint8(0x80) // empty value (0)
             );
         }
 
